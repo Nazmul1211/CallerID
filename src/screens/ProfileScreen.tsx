@@ -1,240 +1,258 @@
+// User profile management
 import React from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Alert,
   ScrollView,
+  StatusBar,
+  Alert,
+  Linking,
+  Platform,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext';
+import { Screen } from '../navigation/AppNavigator';
+import { useUserContext } from '../context/UserContext';
+import { User } from '../config/supabase';
 
-const ProfileScreen = () => {
-  const { user, signOut } = useAuth();
+interface ProfileScreenProps {
+  setCurrentScreen: (screen: Screen) => void;
+  user: User | null;
+}
 
-  const handleSignOut = () => {
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ setCurrentScreen, user }) => {
+  const { setUser } = useUserContext();
+
+  const openDialer = async (phoneNumber: string) => {
+    try {
+      const cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+      const url = `tel:${cleanNumber}`;
+      const supported = await Linking.canOpenURL(url);
+
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Unable to open dialer');
+      }
+    } catch (error) {
+      console.error('Dialer error:', error);
+      Alert.alert('Error', 'Failed to open dialer');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Sign Out',
+          text: 'Delete',
           style: 'destructive',
-          onPress: signOut
+          onPress: async () => {
+            try {
+              setUser(null);
+              setCurrentScreen('auth');
+              Alert.alert('Account Deleted', 'Your account has been deleted.');
+            } catch (error) {
+              console.error('Delete account error:', error);
+              Alert.alert('Error', 'Failed to delete account');
+            }
+          }
         }
       ]
     );
   };
 
-  if (!user) {
-    return null;
-  }
-
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#4A90E2" />
+      
+      {/* Profile Header with proper spacing */}
+      <View style={[styles.header, { paddingTop: (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0) + 20 }]}>
+        <Text style={styles.headerTitle}>Profile</Text>
+      </View>
 
-        <View style={styles.profileSection}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* User Profile Card */}
+        {user && (
           <View style={styles.profileCard}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {user.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileAvatarText}>
+                {user.name.charAt(0).toUpperCase()}
+              </Text>
             </View>
             
-            <Text style={styles.userName}>{user.name}</Text>
-            <Text style={styles.userPhone}>{user.phone_number}</Text>
-            {user.email && <Text style={styles.userEmail}>{user.email}</Text>}
+            <Text style={styles.profileName}>{user.name}</Text>
+            
+            <TouchableOpacity onPress={() => openDialer(user.phone_number)}>
+              <Text style={styles.profilePhone}>📞 {user.phone_number}</Text>
+            </TouchableOpacity>
+            
+            {user.email && (
+              <Text style={styles.profileEmail}>✉️ {user.email}</Text>
+            )}
           </View>
-        </View>
+        )}
 
-        <View style={styles.actionsSection}>
-          <View style={styles.actionCard}>
-            <Text style={styles.sectionTitle}>Account</Text>
-            
-            <TouchableOpacity style={styles.actionItem}>
-              <Text style={styles.actionText}>Edit Profile</Text>
-              <Text style={styles.actionArrow}>›</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.separator} />
-            
-            <TouchableOpacity style={styles.actionItem}>
-              <Text style={styles.actionText}>Privacy Settings</Text>
-              <Text style={styles.actionArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Profile Actions */}
+        <View style={styles.profileActions}>
+          <TouchableOpacity
+            style={styles.profileActionButton}
+            onPress={() => setCurrentScreen('editProfile')}
+          >
+            <Text style={styles.profileActionIcon}>✏️</Text>
+            <Text style={styles.profileActionText}>Edit Profile</Text>
+            <Text style={styles.profileActionArrow}>→</Text>
+          </TouchableOpacity>
 
-          <View style={styles.actionCard}>
-            <Text style={styles.sectionTitle}>About</Text>
-            
-            <TouchableOpacity style={styles.actionItem}>
-              <Text style={styles.actionText}>Help & Support</Text>
-              <Text style={styles.actionArrow}>›</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.separator} />
-            
-            <TouchableOpacity style={styles.actionItem}>
-              <Text style={styles.actionText}>Terms of Service</Text>
-              <Text style={styles.actionArrow}>›</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.separator} />
-            
-            <TouchableOpacity style={styles.actionItem}>
-              <Text style={styles.actionText}>Privacy Policy</Text>
-              <Text style={styles.actionArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[styles.profileActionButton, styles.dangerAction]}
+            onPress={handleDeleteAccount}
+          >
+            <Text style={styles.profileActionIcon}>🗑️</Text>
+            <Text style={[styles.profileActionText, styles.dangerText]}>Delete Account</Text>
+            <Text style={styles.profileActionArrow}>→</Text>
+          </TouchableOpacity>
 
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
+          <TouchableOpacity
+            style={styles.signOutButton}
+            onPress={() => {
+              setUser(null);
+              setCurrentScreen('auth');
+            }}
+          >
+            <Text style={styles.signOutButtonText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>CallerID v1.0.0</Text>
-          <Text style={styles.footerSubtext}>
-            Help build a safer calling community
-          </Text>
-        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    backgroundColor: '#F8F9FA',
   },
   header: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 24,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  profileSection: {
-    marginBottom: 32,
+  content: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
   },
   profileCard: {
     backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginTop: 24,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
-  avatarContainer: {
-    marginBottom: 16,
-  },
-  avatar: {
+  profileAvatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4A90E2',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
   },
-  avatarText: {
+  profileAvatarText: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  userName: {
+  profileName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: '#333333',
+    marginBottom: 8,
+  },
+  profilePhone: {
+    fontSize: 18,
+    color: '#4A90E2',
     marginBottom: 4,
   },
-  userPhone: {
-    fontSize: 18,
-    color: '#007AFF',
-    marginBottom: 2,
-  },
-  userEmail: {
+  profileEmail: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#666666',
   },
-  actionsSection: {
-    marginBottom: 32,
+  profileActions: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    gap: 16,
   },
-  actionCard: {
+  profileActionButton: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
-  sectionTitle: {
+  dangerAction: {
+    borderColor: '#FF5252',
+  },
+  profileActionIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  profileActionText: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
-    padding: 16,
-    paddingBottom: 8,
+    color: '#333333',
   },
-  actionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  dangerText: {
+    color: '#FF5252',
   },
-  actionText: {
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  actionArrow: {
+  profileActionArrow: {
     fontSize: 20,
-    color: '#8E8E93',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#E5E5EA',
-    marginHorizontal: 16,
+    color: '#CCCCCC',
+    fontWeight: 'bold',
   },
   signOutButton: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#FF5252',
+    borderRadius: 16,
+    paddingVertical: 18,
     alignItems: 'center',
     marginTop: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  signOutText: {
+  signOutButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
   },
-  footer: {
-    alignItems: 'center',
-    paddingTop: 24,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 4,
-  },
-  footerSubtext: {
-    fontSize: 12,
-    color: '#8E8E93',
-    textAlign: 'center',
-  },
 });
 
-export default ProfileScreen; 
+export default ProfileScreen;

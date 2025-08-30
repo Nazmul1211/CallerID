@@ -1,3 +1,4 @@
+// Main dashboard
 import React, { useState } from 'react';
 import {
   View,
@@ -5,22 +6,73 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Alert,
   ScrollView,
   ActivityIndicator,
+  StatusBar,
+  Alert,
+  Linking,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import { databaseService } from '../services/database';
+import Header from '../components/Header';
 
-const HomeScreen = () => {
+const HomeScreen: React.FC = () => {
   const [searchNumber, setSearchNumber] = useState('');
-  const [searchResult, setSearchResult] = useState<{
-    name?: string;
-    isSpam: boolean;
-    spamCount: number;
-    contact?: any;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const makeCall = async (phoneNumber: string, contactName?: string) => {
+    try {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CALL_PHONE,
+          {
+            title: 'Call Permission',
+            message: 'This app needs access to make phone calls.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission Denied', 'Cannot make a call without permission.');
+          return;
+        }
+      }
+
+      const cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+      const url = `tel:${cleanNumber}`;
+      const supported = await Linking.canOpenURL(url);
+
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Unable to handle this call');
+      }
+    } catch (error) {
+      console.error('Call error:', error);
+      Alert.alert('Error', 'Failed to make call');
+    }
+  };
+
+  const openDialer = async (phoneNumber: string) => {
+    try {
+      const cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+      const url = `tel:${cleanNumber}`;
+      const supported = await Linking.canOpenURL(url);
+
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Unable to open dialer');
+      }
+    } catch (error) {
+      console.error('Dialer error:', error);
+      Alert.alert('Error', 'Failed to open dialer');
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchNumber.trim()) {
@@ -28,263 +80,309 @@ const HomeScreen = () => {
       return;
     }
 
-    setLoading(true);
+    setSearchLoading(true);
     try {
+      console.log('Searching for:', searchNumber.trim());
       const result = await databaseService.callerIdLookup(searchNumber.trim());
+      console.log('Search result:', result);
       setSearchResult(result);
+      
+      if (!result.name && result.spamCount === 0) {
+        Alert.alert('No Results', 'No information found for this number');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to search. Please try again.');
       console.error('Search error:', error);
+      Alert.alert('Error', `Failed to search: ${(error as any).message || 'Please check your connection'}`);
     } finally {
-      setLoading(false);
+      setSearchLoading(false);
     }
   };
 
-  const clearSearch = () => {
-    setSearchNumber('');
-    setSearchResult(null);
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>CallerID Search</Text>
-          <Text style={styles.subtitle}>Enter a phone number to identify the caller</Text>
-        </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#4A90E2" />
+      
+      <Header
+        title="Caller ID"
+        subtitle="Protection Active"
+      />
 
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Search Section */}
         <View style={styles.searchSection}>
+          <Text style={styles.sectionTitle}>Identify Caller</Text>
           <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Enter phone number"
-              value={searchNumber}
-              onChangeText={setSearchNumber}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-            />
+            <View style={styles.searchInputGroup}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Enter phone number to search"
+                placeholderTextColor="#A0A0A0"
+                value={searchNumber}
+                onChangeText={setSearchNumber}
+                keyboardType="phone-pad"
+              />
+            </View>
+            
             <TouchableOpacity
-              style={[styles.searchButton, loading && styles.buttonDisabled]}
+              style={[styles.searchButton, searchLoading && styles.buttonDisabled]}
               onPress={handleSearch}
-              disabled={loading}>
-              {loading ? (
+              disabled={searchLoading}
+            >
+              {searchLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <Text style={styles.searchButtonText}>Search</Text>
               )}
             </TouchableOpacity>
           </View>
-
-          {searchNumber.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
-              <Text style={styles.clearButtonText}>Clear</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
+        {/* Search Results */}
         {searchResult && (
           <View style={styles.resultSection}>
-            <Text style={styles.resultTitle}>Search Result</Text>
-            
-            <View style={[
-              styles.resultCard,
-              searchResult.isSpam && styles.spamCard
-            ]}>
+            <View style={[styles.resultCard, searchResult.isSpam && styles.spamResultCard]}>
               <View style={styles.resultHeader}>
-                <Text style={styles.phoneNumber}>{searchNumber}</Text>
-                {searchResult.isSpam && (
-                  <View style={styles.spamBadge}>
-                    <Text style={styles.spamBadgeText}>SPAM</Text>
-                  </View>
-                )}
+                <Text style={styles.resultNumber}>{searchNumber}</Text>
+                {searchResult.isSpam && <Text style={styles.spamBadge}>⚠️ SPAM</Text>}
               </View>
-
+              
               {searchResult.name ? (
-                <Text style={styles.callerName}>{searchResult.name}</Text>
+                <Text style={styles.resultName}>{searchResult.name}</Text>
               ) : (
-                <Text style={styles.unknownCaller}>Unknown Caller</Text>
+                <Text style={styles.unknownResult}>Unknown Caller</Text>
               )}
-
+              
               {searchResult.spamCount > 0 && (
-                <Text style={styles.spamCount}>
+                <Text style={styles.spamInfo}>
                   Reported as spam {searchResult.spamCount} times
                 </Text>
               )}
-
+              
               {!searchResult.name && !searchResult.isSpam && (
-                <Text style={styles.noData}>
+                <Text style={styles.noResultInfo}>
                   No information available for this number
                 </Text>
               )}
+              
+              {/* Enhanced Call Buttons */}
+              <View style={styles.resultActions}>
+                <TouchableOpacity
+                  style={styles.dialerButton}
+                  onPress={() => openDialer(searchNumber)}
+                >
+                  <Text style={styles.dialerButtonText}>📞 Open Dialer</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={() => makeCall(searchNumber, searchResult.name)}
+                >
+                  <Text style={styles.callButtonText}>📱 Call Now</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
 
-        <View style={styles.infoSection}>
-          <Text style={styles.infoTitle}>How it works</Text>
-          <Text style={styles.infoText}>
-            • Search phone numbers to identify callers{'\n'}
-            • Get crowd-sourced information from the community{'\n'}
-            • Help others by adding contacts and reporting spam{'\n'}
-            • Build a safer calling experience together
-          </Text>
+        {/* Quick Tips */}
+        <View style={styles.tipsSection}>
+          <View style={styles.tipCard}>
+            <Text style={styles.tipTitle}>💡 Quick Tips</Text>
+            <Text style={styles.tipText}>
+              📞 +1987654321 - Clean contact{'\n'}
+              ⚠️ +1555000999 - Spam number{'\n'}
+              📱 Tap results to call directly
+            </Text>
+          </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#F8F9FA',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    textAlign: 'center',
+  content: {
+    flex: 1,
   },
   searchSection: {
-    marginBottom: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333333',
+    marginBottom: 16,
   },
   searchContainer: {
+    marginBottom: 8,
+  },
+  searchInputGroup: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    minHeight: 60,
+  },
+  searchIcon: {
+    fontSize: 20,
+    marginRight: 16,
+    opacity: 0.6,
   },
   searchInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#D1D1D6',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 18,
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
-    color: '#1C1C1E',
+    color: '#333333',
   },
   searchButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    backgroundColor: '#4A90E2',
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 80,
-  },
-  buttonDisabled: {
-    backgroundColor: '#8E8E93',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   searchButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
-  clearButton: {
-    alignSelf: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-  clearButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
+  buttonDisabled: {
+    backgroundColor: '#CCCCCC',
   },
   resultSection: {
-    marginBottom: 32,
-  },
-  resultTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   resultCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
-  spamCard: {
-    borderColor: '#FF3B30',
+  spamResultCard: {
+    borderColor: '#FF5252',
     backgroundColor: '#FFF5F5',
   },
   resultHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  phoneNumber: {
+  resultNumber: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: '#333333',
   },
   spamBadge: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  spamBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 16,
+    color: '#FF5252',
     fontWeight: 'bold',
   },
-  callerName: {
+  resultName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 4,
+    color: '#333333',
+    marginBottom: 8,
   },
-  unknownCaller: {
+  unknownResult: {
     fontSize: 18,
-    color: '#8E8E93',
+    color: '#666666',
     fontStyle: 'italic',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  spamCount: {
+  spamInfo: {
     fontSize: 14,
-    color: '#FF3B30',
-    marginTop: 8,
+    color: '#FF5252',
+    marginBottom: 8,
   },
-  noData: {
+  noResultInfo: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#666666',
     textAlign: 'center',
-    marginTop: 8,
+    marginBottom: 8,
   },
-  infoSection: {
+  resultActions: {
+    flexDirection: 'row',
+    marginTop: 16,
+    gap: 12,
+  },
+  dialerButton: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  callButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  dialerButtonText: {
+    fontSize: 16,
+    color: '#4A90E2',
+    fontWeight: '600',
+  },
+  callButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  tipsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  tipCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    marginTop: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
-  infoTitle: {
+  tipTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: '#333333',
     marginBottom: 12,
   },
-  infoText: {
+  tipText: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#666666',
     lineHeight: 24,
   },
 });
 
-export default HomeScreen; 
+export default HomeScreen;

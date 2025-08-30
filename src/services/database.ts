@@ -1,3 +1,4 @@
+// Supabase database operations
 import { supabase } from '../config/supabase';
 import { User, Contact, SpamReport } from '../config/supabase';
 

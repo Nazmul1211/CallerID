@@ -1,3 +1,4 @@
+// Login/Register functionality
 import React, { useState } from 'react';
 import {
   View,
@@ -5,20 +6,27 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
-  SafeAreaView,
+  ActivityIndicator,
+  StatusBar,
+  Alert,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext';
+import { databaseService } from '../services/database';
+import { Screen } from '../navigation/AppNavigator';
+import { useUserContext } from '../context/UserContext';
 
-const AuthScreen = () => {
+interface AuthScreenProps {
+  setCurrentScreen: (screen: Screen) => void;
+}
+
+const AuthScreen: React.FC<AuthScreenProps> = ({ setCurrentScreen }) => {
+  const { setUser } = useUserContext();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
 
   const handleSignIn = async () => {
     if (!phoneNumber.trim() || !name.trim()) {
@@ -26,7 +34,6 @@ const AuthScreen = () => {
       return;
     }
 
-    // Basic phone number validation
     const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
     if (!phoneRegex.test(phoneNumber)) {
       Alert.alert('Error', 'Please enter a valid phone number');
@@ -34,161 +41,227 @@ const AuthScreen = () => {
     }
 
     setLoading(true);
-    const success = await signIn(phoneNumber.trim(), name.trim(), email.trim() || undefined);
-    setLoading(false);
-
-    if (!success) {
-      Alert.alert('Error', 'Failed to sign in. Please try again.');
+    try {
+      console.log('Attempting to sign in with:', phoneNumber.trim());
+      
+      let existingUser = await databaseService.getUserByPhone(phoneNumber.trim());
+      
+      if (existingUser) {
+        console.log('Found existing user:', existingUser);
+        setUser(existingUser);
+        setCurrentScreen('home');
+        Alert.alert('Welcome Back!', `Hello ${existingUser.name}!`);
+      } else {
+        console.log('Creating new user...');
+        const newUser = await databaseService.createUser(phoneNumber.trim(), name.trim(), email.trim() || undefined);
+        if (newUser) {
+          console.log('Created new user:', newUser);
+          setUser(newUser);
+          setCurrentScreen('home');
+          Alert.alert('Welcome!', 'Account created successfully!');
+        } else {
+          Alert.alert('Error', 'Failed to create account. Please check your connection and try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Sign in error:', error);
+      Alert.alert('Error', `Failed to sign in: ${(error as any).message || 'Please check your internet connection'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.content}>
-            <Text style={styles.title}>CallerID</Text>
-            <Text style={styles.subtitle}>Join the community to identify unknown callers</Text>
-
-            <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Phone Number *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your phone number"
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
-                  textContentType="telephoneNumber"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Full Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your full name"
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                  autoComplete="name"
-                  textContentType="name"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleSignIn}
-                disabled={loading}>
-                <Text style={styles.buttonText}>
-                  {loading ? 'Signing In...' : 'Get Started'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.disclaimer}>
-              By continuing, you agree to share your phone number to help identify spam calls
-              and improve the community database.
-            </Text>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#4A90E2" />
+      <View style={styles.gradient}>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoIcon}>📞</Text>
           </View>
+          <Text style={styles.title}>Caller ID</Text>
+          <Text style={styles.subtitle}>Join the community to identify unknown callers</Text>
+        </View>
+
+        {/* Form Section */}
+        <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputIcon}>📱</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your phone number"
+              placeholderTextColor="#A0A0A0"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputIcon}>👤</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your full name"
+              placeholderTextColor="#A0A0A0"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputIcon}>✉️</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email address (optional)"
+              placeholderTextColor="#A0A0A0"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleSignIn}
+            disabled={loading}
+          >
+            <View style={styles.buttonContent}>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.buttonText}>Get Started</Text>
+                  <Text style={styles.buttonArrow}>→</Text>
+                </>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          <Text style={styles.disclaimer}>
+            By continuing, you agree to help build a community database to identify spam callers
+          </Text>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#4A90E2',
   },
-  keyboardAvoidingView: {
+  gradient: {
     flex: 1,
   },
-  scrollContainer: {
-    flexGrow: 1,
+  header: {
+    flex: 0.35,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
   },
-  content: {
-    flex: 1,
+  logoContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoIcon: {
+    fontSize: 50,
+    color: '#FFFFFF',
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#FFFFFF',
     textAlign: 'center',
-    color: '#1C1C1E',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
-    marginBottom: 48,
     lineHeight: 22,
   },
   form: {
-    marginBottom: 32,
+    flex: 0.65,
+    paddingHorizontal: 30,
   },
-  inputContainer: {
+  inputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     marginBottom: 20,
+    paddingHorizontal: 20,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    minHeight: 60,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 8,
+  inputIcon: {
+    fontSize: 24,
+    marginRight: 16,
+    opacity: 0.8,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#D1D1D6',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    flex: 1,
+    paddingVertical: 18,
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
-    color: '#1C1C1E',
+    color: '#333333',
+    fontWeight: '500',
   },
   button: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 12,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 16,
+    marginTop: 24,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  buttonDisabled: {
-    backgroundColor: '#8E8E93',
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    minHeight: 56,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginRight: 8,
+  },
+  buttonArrow: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    backgroundColor: '#CCCCCC',
   },
   disclaimer: {
-    fontSize: 14,
-    color: '#8E8E93',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
+    marginTop: 32,
+    paddingHorizontal: 20,
   },
 });
 
-export default AuthScreen; 
+export default AuthScreen;

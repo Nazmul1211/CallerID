@@ -1,11 +1,13 @@
+// App configuration
+// Supabase client setup
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://pisbzazcvsvinmowwvle.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpc2J6YXpjdnN2aW5tb3d3dmxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0NjUxODQsImV4cCI6MjA2OTA0MTE4NH0.2KCF4jQTT2H3FZtpbcTqCEDRgWBty30Bc4jwg0mZP_0';
 
-// const supabaseUrl = process.env.SUPABASE_DATABASE_URL || '';
-// const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+// const supabaseUrl = process.env.REACT_APP_SUPABASE_DATABASE_URL || '';
+// const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

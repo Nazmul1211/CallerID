@@ -1,5 +1,5 @@
-// Add new contacts
-import React, { useState } from 'react';
+// Edit user details
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,60 +10,72 @@ import {
   ActivityIndicator,
   StatusBar,
   Alert,
+  Linking,
   Platform,
 } from 'react-native';
 import { databaseService } from '../services/database';
 import { Screen } from '../navigation/AppNavigator';
 import { useUserContext } from '../context/UserContext';
+import { User } from '../config/supabase';
 
-interface AddContactScreenProps {
+interface EditProfileScreenProps {
   setCurrentScreen: (screen: Screen) => void;
+  user: User | null;
 }
 
-const AddContactScreen: React.FC<AddContactScreenProps> = ({ setCurrentScreen }) => {
-  const { user } = useUserContext();
-  const [newContactPhone, setNewContactPhone] = useState('');
-  const [newContactName, setNewContactName] = useState('');
-  const [newContactEmail, setNewContactEmail] = useState('');
+const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ setCurrentScreen, user }) => {
+  const { setUser } = useUserContext();
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleAddContact = async () => {
-    if (!newContactPhone.trim() || !newContactName.trim()) {
-      Alert.alert('Error', 'Please enter phone number and name');
-      return;
+  useEffect(() => {
+    if (user) {
+      setEditName(user.name);
+      setEditEmail(user.email || '');
     }
+  }, [user]);
 
-    if (!user) return;
+  const openDialer = async (phoneNumber: string) => {
+    try {
+      const cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+      const url = `tel:${cleanNumber}`;
+      const supported = await Linking.canOpenURL(url);
 
-    const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
-    if (!phoneRegex.test(newContactPhone)) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Unable to open dialer');
+      }
+    } catch (error) {
+      console.error('Dialer error:', error);
+      Alert.alert('Error', 'Failed to open dialer');
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!user || !editName.trim()) {
+      Alert.alert('Error', 'Please enter your name');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('Adding contact:', { phone: newContactPhone.trim(), name: newContactName.trim() });
-      const contact = await databaseService.addContact(
-        user.id,
-        newContactPhone.trim(),
-        newContactName.trim(),
-        newContactEmail.trim() || undefined
-      );
+      const updatedUser = await databaseService.updateUser(user.id, {
+        name: editName.trim(),
+        email: editEmail.trim() || undefined,
+      });
 
-      if (contact) {
-        console.log('Contact added successfully:', contact);
-        Alert.alert('Success', 'Contact added successfully!');
-        setNewContactPhone('');
-        setNewContactName('');
-        setNewContactEmail('');
-        setCurrentScreen('contacts');
+      if (updatedUser) {
+        setUser(updatedUser);
+        Alert.alert('Success', 'Profile updated successfully!');
+        setCurrentScreen('profile');
       } else {
-        Alert.alert('Error', 'Failed to add contact. It may already exist or there was a connection issue.');
+        Alert.alert('Error', 'Failed to update profile');
       }
     } catch (error) {
-      console.error('Add contact error:', error);
-      Alert.alert('Error', `Failed to add contact: ${(error as any).message || 'Please try again'}`);
+      console.error('Update profile error:', error);
+      Alert.alert('Error', `Failed to update profile: ${(error as any).message || 'Please try again'}`);
     } finally {
       setLoading(false);
     }
@@ -77,38 +89,41 @@ const AddContactScreen: React.FC<AddContactScreenProps> = ({ setCurrentScreen })
       <View style={[styles.header, { paddingTop: (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0) + 20 }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => setCurrentScreen('contacts')}
+          onPress={() => setCurrentScreen('profile')}
         >
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Add Contact</Text>
+        <Text style={styles.title}>Edit Profile</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.form}>
-          <Text style={styles.formTitle}>New Contact Information</Text>
+          <Text style={styles.formTitle}>Update Your Information</Text>
           
+          {/* Phone Number (Read Only) */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputIcon}>📱</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Phone number (required)"
-              placeholderTextColor="#A0A0A0"
-              value={newContactPhone}
-              onChangeText={setNewContactPhone}
-              keyboardType="phone-pad"
-            />
+            <TouchableOpacity onPress={() => user && openDialer(user.phone_number)}>
+              <TextInput
+                style={[styles.formInput, styles.disabledInput]}
+                value={user?.phone_number}
+                editable={false}
+                placeholder="Phone number"
+                placeholderTextColor="#999999"
+              />
+            </TouchableOpacity>
           </View>
-          
+          <Text style={styles.inputHelp}>Phone number cannot be changed (tap to call)</Text>
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputIcon}>👤</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Contact name (required)"
+              style={styles.formInput}
+              placeholder="Full name (required)"
               placeholderTextColor="#A0A0A0"
-              value={newContactName}
-              onChangeText={setNewContactName}
+              value={editName}
+              onChangeText={setEditName}
               autoCapitalize="words"
             />
           </View>
@@ -116,25 +131,25 @@ const AddContactScreen: React.FC<AddContactScreenProps> = ({ setCurrentScreen })
           <View style={styles.inputGroup}>
             <Text style={styles.inputIcon}>✉️</Text>
             <TextInput
-              style={styles.input}
+              style={styles.formInput}
               placeholder="Email address (optional)"
               placeholderTextColor="#A0A0A0"
-              value={newContactEmail}
-              onChangeText={setNewContactEmail}
+              value={editEmail}
+              onChangeText={setEditEmail}
               keyboardType="email-address"
               autoCapitalize="none"
             />
           </View>
 
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleAddContact}
+            style={[styles.formButton, loading && styles.buttonDisabled]}
+            onPress={handleUpdateProfile}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.buttonText}>Add Contact</Text>
+              <Text style={styles.formButtonText}>Update Profile</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -206,14 +221,25 @@ const styles = StyleSheet.create({
     marginRight: 16,
     opacity: 0.8,
   },
-  input: {
+  formInput: {
     flex: 1,
     paddingVertical: 18,
     fontSize: 16,
     color: '#333333',
     fontWeight: '500',
   },
-  button: {
+  disabledInput: {
+    color: '#999999',
+    backgroundColor: 'transparent',
+  },
+  inputHelp: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: -12,
+    marginBottom: 16,
+    marginLeft: 56,
+  },
+  formButton: {
     backgroundColor: '#4A90E2',
     borderRadius: 16,
     paddingVertical: 18,
@@ -225,14 +251,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
-  buttonText: {
+  buttonDisabled: {
+    backgroundColor: '#CCCCCC',
+  },
+  formButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
   },
-  buttonDisabled: {
-    backgroundColor: '#CCCCCC',
-  },
 });
 
-export default AddContactScreen;
+export default EditProfileScreen;

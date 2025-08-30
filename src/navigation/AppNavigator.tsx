@@ -1,92 +1,55 @@
+// App routing logic (Screen navigation controller)
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-
-// Import screens
+import { View } from 'react-native';
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ContactsScreen from '../screens/ContactsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import AddContactScreen from '../screens/AddContactScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import BottomTabs from '../components/BottomTabs';
+import { User } from '../config/supabase';
 
-// Import auth context
-import { useAuth } from '../context/AuthContext';
+export type Screen = 'auth' | 'home' | 'contacts' | 'addContact' | 'profile' | 'editProfile';
 
-const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
+interface AppNavigatorProps {
+  currentScreen: Screen;
+  setCurrentScreen: (screen: Screen) => void;
+  user: User | null;
+}
 
-const TabNavigator = () => {
+const AppNavigator: React.FC<AppNavigatorProps> = ({
+  currentScreen,
+  setCurrentScreen,
+  user,
+}) => {
+  const renderCurrentScreen = () => {
+    switch (currentScreen) {
+      case 'auth':
+        return <AuthScreen setCurrentScreen={setCurrentScreen} />;
+      case 'home':
+        return <HomeScreen />;
+      case 'contacts':
+        return <ContactsScreen setCurrentScreen={setCurrentScreen} />;
+      case 'addContact':
+        return <AddContactScreen setCurrentScreen={setCurrentScreen} />;
+      case 'editProfile':
+        return <EditProfileScreen setCurrentScreen={setCurrentScreen} user={user} />;
+      case 'profile':
+        return <ProfileScreen setCurrentScreen={setCurrentScreen} user={user} />;
+      default:
+        return <HomeScreen />;
+    }
+  };
+
   return (
-    <Tab.Navigator
-      screenOptions={{
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
-        headerShown: false,
-      }}>
-      <Tab.Screen 
-        name="Home" 
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Search',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="search" size={size} color={color} />
-          // ),
-        }}
-      />
-      <Tab.Screen 
-        name="Contacts" 
-        component={ContactsScreen}
-        options={{
-          tabBarLabel: 'Contacts',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="contacts" size={size} color={color} />
-          // ),
-        }}
-      />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profile',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="person" size={size} color={color} />
-          // ),
-        }}
-      />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      {renderCurrentScreen()}
+      {user && !['addContact', 'editProfile'].includes(currentScreen) && (
+        <BottomTabs currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} />
+      )}
+    </View>
   );
 };
 
-const AppNavigator = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return null; // Or a loading spinner
-  }
-
-  return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <>
-            <Stack.Screen name="MainTabs" component={TabNavigator} />
-            <Stack.Screen 
-              name="AddContact" 
-              component={AddContactScreen}
-              options={{
-                headerShown: true,
-                title: 'Add Contact',
-                presentation: 'modal',
-              }}
-            />
-          </>
-        ) : (
-          <Stack.Screen name="Auth" component={AuthScreen} />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
-};
-
-export default AppNavigator; 
+export default AppNavigator;
